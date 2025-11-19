@@ -1,0 +1,148 @@
+diff --git a/fs/internal.h b/fs/internal.h
+index 204e1e253..dffebf7b3 100644
+--- a/fs/internal.h
++++ b/fs/internal.h
+@@ -66,10 +66,11 @@ extern struct vfsmount *lookup_mnt(const struct path *);
+ extern int finish_automount(struct vfsmount *, struct path *);
+ 
+ extern int sb_prepare_remount_readonly(struct super_block *);
+ 
+ extern void __init mnt_init(void);
++int path_umount(struct path *path, int flags);
+ 
+ extern int __mnt_want_write(struct vfsmount *);
+ extern int __mnt_want_write_file(struct file *);
+ extern int mnt_want_write_file_path(struct file *);
+ extern void __mnt_drop_write(struct vfsmount *);
+diff --git a/fs/namespace.c b/fs/namespace.c
+index 7c167ff80..991f44aae 100644
+--- a/fs/namespace.c
++++ b/fs/namespace.c
+@@ -2014,10 +2014,40 @@ SYSCALL_DEFINE1(oldumount, char __user *, name)
+ 	return sys_umount(name, 0);
+ }
+ 
+ #endif
+ 
++static int can_umount(const struct path *path, int flags)
++ {
++	 struct mount *mnt = real_mount(path->mnt);
++	 if (flags & ~(MNT_FORCE | MNT_DETACH | MNT_EXPIRE | UMOUNT_NOFOLLOW))
++		 return -EINVAL;
++	 if (!may_mount())
++		 return -EPERM;
++	 if (path->dentry != path->mnt->mnt_root)
++		 return -EINVAL;
++	 if (!check_mnt(mnt))
++		 return -EINVAL;
++	 if (mnt->mnt.mnt_flags & MNT_LOCKED)
++		 return -EINVAL;
++	 if (flags & MNT_FORCE && !capable(CAP_SYS_ADMIN))
++		 return -EPERM;
++	 return 0;
++ }
++
++int path_umount(struct path *path, int flags)
++ {
++	 struct mount *mnt = real_mount(path->mnt);
++	 int ret;
++	 ret = can_umount(path, flags);
++	 if (!ret)
++		 ret = do_umount(mnt, flags);
++	 dput(path->dentry);
++	 mntput_no_expire(mnt);
++	 return ret;
++ }
++
+ static bool is_mnt_ns_file(struct dentry *dentry)
+ {
+ 	/* Is this a proxy for a mount namespace? */
+ 	return dentry->d_op == &ns_dentry_operations &&
+ 	       dentry->d_fsdata == &mntns_operations;
+diff --git a/fs/susfs.c b/fs/susfs.c
+index 2d9576899..2932b429b 100644
+--- a/fs/susfs.c
++++ b/fs/susfs.c
+@@ -18,11 +18,11 @@
+ 
+ static spinlock_t susfs_spin_lock;
+ 
+ extern bool susfs_is_current_ksu_domain(void);
+ #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+-extern void ksu_try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid);
++extern void try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid);
+ #endif
+ 
+ #ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
+ bool susfs_is_log_enabled __read_mostly = true;
+ #define SUSFS_LOGI(fmt, ...) if (susfs_is_log_enabled) pr_info("susfs:[%u][%d][%s] " fmt, current_uid().val, current->pid, __func__, ##__VA_ARGS__)
+@@ -560,13 +560,13 @@ void susfs_try_umount(uid_t target_uid) {
+ 	struct st_susfs_try_umount_list *cursor = NULL;
+ 
+ 	// We should umount in reversed order
+ 	list_for_each_entry_reverse(cursor, &LH_TRY_UMOUNT_PATH, list) {
+ 		if (cursor->info.mnt_mode == TRY_UMOUNT_DEFAULT) {
+-			ksu_try_umount(cursor->info.target_pathname, false, 0, target_uid);
++			try_umount(cursor->info.target_pathname, false, 0, target_uid);
+ 		} else if (cursor->info.mnt_mode == TRY_UMOUNT_DETACH) {
+-			ksu_try_umount(cursor->info.target_pathname, false, MNT_DETACH, target_uid);
++			try_umount(cursor->info.target_pathname, false, MNT_DETACH, target_uid);
+ 		} else {
+ 			SUSFS_LOGE("failed umounting '%s' for uid: %d, mnt_mode '%d' not supported\n",
+ 							cursor->info.target_pathname, target_uid, cursor->info.mnt_mode);
+ 		}
+ 	}
+diff --git a/include/linux/cred.h b/include/linux/cred.h
+index e7f3f559c..2b8e3a257 100644
+--- a/include/linux/cred.h
++++ b/include/linux/cred.h
+@@ -262,10 +262,21 @@ static inline const struct cred *get_cred(const struct cred *cred)
+  *
+  * This takes a const pointer to a set of credentials because the credentials
+  * on task_struct are attached by const pointers to prevent accidental
+  * alteration of otherwise immutable credential sets.
+  */
++static inline const struct cred *get_cred_rcu(const struct cred *cred)
++ {
++	 struct cred *nonconst_cred = (struct cred *) cred;
++	 if (!cred)
++		 return NULL;
++	 if (!atomic_long_inc_not_zero(&nonconst_cred->usage))
++		 return NULL;
++	 validate_creds(cred);
++	 return cred;
++ }
++
+ static inline void put_cred(const struct cred *_cred)
+ {
+ 	struct cred *cred = (struct cred *) _cred;
+ 
+ 	if (cred) {
+diff --git a/include/linux/seccomp.h b/include/linux/seccomp.h
+index a9d5c52de..4adb3b100 100644
+--- a/include/linux/seccomp.h
++++ b/include/linux/seccomp.h
+@@ -9,10 +9,11 @@
+ 					 SECCOMP_FILTER_FLAG_SPEC_ALLOW)
+ 
+ #ifdef CONFIG_SECCOMP
+ 
+ #include <linux/thread_info.h>
++#include <linux/atomic.h>
+ #include <asm/seccomp.h>
+ 
+ struct seccomp_filter;
+ /**
+  * struct seccomp - the state of a seccomp'ed process
+@@ -25,10 +26,11 @@ struct seccomp_filter;
+  *          @filter must only be accessed from the context of current as there
+  *          is no read locking.
+  */
+ struct seccomp {
+ 	int mode;
++	atomic_t filter_count;
+ 	struct seccomp_filter *filter;
+ };
+ 
+ #ifdef CONFIG_HAVE_ARCH_SECCOMP_FILTER
+ extern int __secure_computing(const struct seccomp_data *sd);
