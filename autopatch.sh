@@ -12,6 +12,7 @@ kern_patches=(
 	"kernel05-fix-susfs-build-on-sweet.patch"
 	"kernel06-enable-kprobe-for-sweet.patch"
 	"kernel07-enable-susfs-overlayfs.patch"
+	"kernel08-use-ksu-manual-hooks.patch"
 )
 
 git clone --depth=1 https://github.com/pixelos-devices/android_kernel_xiaomi_sm6150
