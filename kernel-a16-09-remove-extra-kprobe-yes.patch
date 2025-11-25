@@ -1,0 +1,16 @@
+diff --git a/arch/arm64/configs/sweet_defconfig b/arch/arm64/configs/sweet_defconfig
+index 46e8ada5e..4fbc24479 100644
+--- a/arch/arm64/configs/sweet_defconfig
++++ b/arch/arm64/configs/sweet_defconfig
+@@ -255,11 +255,10 @@ CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y
+ CONFIG_JUMP_LABEL=y
+ # CONFIG_STATIC_KEYS_SELFTEST is not set
+ # CONFIG_UPROBES is not set
+ # CONFIG_HAVE_64BIT_ALIGNED_ACCESS is not set
+ CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS=y
+-CONFIG_HAVE_KPROBES=y
+ CONFIG_HAVE_KRETPROBES=y
+ CONFIG_HAVE_ARCH_TRACEHOOK=y
+ CONFIG_HAVE_DMA_CONTIGUOUS=y
+ CONFIG_GENERIC_SMP_IDLE_THREAD=y
+ CONFIG_GENERIC_IDLE_POLL_SETUP=y
