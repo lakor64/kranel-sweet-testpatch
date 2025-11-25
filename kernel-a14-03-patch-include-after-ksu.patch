@@ -1,0 +1,28 @@
+diff --git a/include/linux/seccomp.h b/include/linux/seccomp.h
+index a9d5c52de..4adb3b100 100644
+--- a/include/linux/seccomp.h
++++ b/include/linux/seccomp.h
+@@ -9,10 +9,11 @@
+ 					 SECCOMP_FILTER_FLAG_SPEC_ALLOW)
+ 
+ #ifdef CONFIG_SECCOMP
+ 
+ #include <linux/thread_info.h>
++#include <linux/atomic.h>
+ #include <asm/seccomp.h>
+ 
+ struct seccomp_filter;
+ /**
+  * struct seccomp - the state of a seccomp'ed process
+@@ -25,10 +26,11 @@ struct seccomp_filter;
+  *          @filter must only be accessed from the context of current as there
+  *          is no read locking.
+  */
+ struct seccomp {
+ 	int mode;
++	atomic_t filter_count;
+ 	struct seccomp_filter *filter;
+ };
+ 
+ #ifdef CONFIG_HAVE_ARCH_SECCOMP_FILTER
+ extern int __secure_computing(const struct seccomp_data *sd);

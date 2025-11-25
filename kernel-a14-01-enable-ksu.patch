@@ -1,0 +1,18 @@
+diff --git a/arch/arm64/configs/vendor/sweet.config b/arch/arm64/configs/vendor/sweet.config
+index cc658755b..d96936600 100644
+--- a/arch/arm64/configs/vendor/sweet.config
++++ b/arch/arm64/configs/vendor/sweet.config
+@@ -82,5 +82,13 @@ CONFIG_NEW_TOUCH_GAMEMODE=y
+ CONFIG_TOUCHSCREEN_TDDI_DBCLK=y
+ CONFIG_TOUCHSCREEN_FTS_K6=y
+ 
+ # Ultrasound proxmity
+ CONFIG_US_PROXIMITY=y
++
++# Ksu
++CONFIG_KSU=y
++CONFIG_KPROBES=n
++CONFIG_HAVE_KPROBES=n
++CONFIG_KPROBE_EVENTS=n
++CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y
++
