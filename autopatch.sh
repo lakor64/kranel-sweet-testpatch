@@ -12,10 +12,15 @@ kern_a16_patches=(
 	"kernel-a16-05-fix-susfs-build-on-sweet.patch"
 	"kernel-a16-06-enable-kprobe-for-sweet.patch"
 	"kernel-a16-07-enable-susfs-overlayfs.patch"
+	"kernel-a16-08-use-ksu-manual-hooks.patch"
+	"kernel-a16-09-remove-extra-kprobe-yes.patch"
 )
 
 kern_a14_patches=(
-
+	"kernel-a14-01-enable-ksu.patch"
+	"kernel-a14-02-patch-susfs-to-kernel-a16-version.patch"
+	"kernel-a14-03-patch-include-after-ksu.patch"
+	"kernel-a14-04-fix-build-file.patch"
 )
 
 android_ver=$(cat android_version 2>/dev/null)
@@ -46,6 +51,7 @@ git reset --HARD 0a0604336d4d1067aa1aaef8d3779b31fcee841d
 cd $kern_dir
 chmod u+x build.sh
 cd drivers
+rm -fr kernelsu 2>/dev/null
 ln -sf $PWD/../../KernelSU-Next/kernel kernelsu
 cd ..
 for i in "${kern_patches[@]}"; do
